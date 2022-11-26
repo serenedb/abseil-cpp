@@ -4216,10 +4216,13 @@ class raw_hash_set {
     return common().infoz();
   }
 
+ public:
   hasher& hash_ref() { return hash_; }
   const hasher& hash_ref() const { return hash_; }
   key_equal& eq_ref() { return eq_; }
   const key_equal& eq_ref() const { return eq_; }
+
+ private:
   CharAlloc& char_alloc_ref() { return alloc_; }
   const CharAlloc& char_alloc_ref() const { return alloc_; }
 
