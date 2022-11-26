@@ -3829,10 +3829,13 @@ class raw_hash_set {
     return common().infoz();
   }
 
+ public:
   hasher& hash_ref() { return settings_.template get<1>(); }
   const hasher& hash_ref() const { return settings_.template get<1>(); }
   key_equal& eq_ref() { return settings_.template get<2>(); }
   const key_equal& eq_ref() const { return settings_.template get<2>(); }
+
+ private:
   CharAlloc& char_alloc_ref() { return settings_.template get<3>(); }
   const CharAlloc& char_alloc_ref() const {
     return settings_.template get<3>();
