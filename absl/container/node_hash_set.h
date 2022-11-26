@@ -466,10 +466,12 @@ class ABSL_ATTRIBUTE_OWNER node_hash_set
   // Returns the hashing function used to hash the keys within this
   // `node_hash_set`.
   using Base::hash_function;
+  using Base::hash_ref;
 
   // node_hash_set::key_eq()
   //
   // Returns the function used for comparing keys equality.
+  using Base::eq_ref;
   using Base::key_eq;
 };
 
