@@ -79,7 +79,8 @@ namespace crc_internal {
 // Non-inline code path for `absl::ExtendCrc32c()`. Do not call directly.
 // Call `absl::ExtendCrc32c()` (defined below) instead.
 crc32c_t ExtendCrc32cInternal(crc32c_t initial_crc,
-                              absl::string_view buf_to_add);
+                              absl::string_view buf_to_add,
+                              uint32_t initial_xor);
 }  // namespace crc_internal
 
 // -----------------------------------------------------------------------------
@@ -98,16 +99,17 @@ crc32c_t ExtendCrc32cInternal(crc32c_t initial_crc,
 //
 // This operation has a runtime cost of O(`buf_to_add.size()`)
 inline crc32c_t ExtendCrc32c(crc32c_t initial_crc,
-                             absl::string_view buf_to_add) {
+                             absl::string_view buf_to_add,
+                             uint32_t initial_xor = 0xffffffffU) {
   // Short inputs are faster to process inline with a simple serial loop.
   if (buf_to_add.size() < crc_internal::kSmallCutoff) {
     uint32_t crc = static_cast<uint32_t>(initial_crc);
     if (crc_internal::ExtendCrc32cInline(&crc, buf_to_add.data(),
-                                         buf_to_add.size())) {
+                                         buf_to_add.size(), initial_xor)) {
       return crc32c_t{crc};
     }
   }
-  return crc_internal::ExtendCrc32cInternal(initial_crc, buf_to_add);
+  return crc_internal::ExtendCrc32cInternal(initial_crc, buf_to_add, initial_xor);
 }
 
 // ComputeCrc32c()
