@@ -1087,6 +1087,11 @@ class CondVar {
   // Note: this method substantially reduces `CondVar` performance.
   void EnableDebugLog(const char* absl_nullable name);
 
+  // std-like API
+  void notify_one() { Signal(); }
+
+  void notify_all() { SignalAll(); }
+
  private:
   bool WaitCommon(Mutex* absl_nonnull mutex,
                   synchronization_internal::KernelTimeout t);
