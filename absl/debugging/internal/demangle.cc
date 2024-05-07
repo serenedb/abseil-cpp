@@ -2931,6 +2931,18 @@ bool Demangle(const char* mangled, char* out, size_t out_size) {
     return DemangleRustSymbolEncoding(mangled, out, out_size);
   }
 
+#if ABSL_INTERNAL_HAS_CXA_DEMANGLE
+  int status = 0;
+  size_t demangled_size = 0;
+  char* demangled = abi::__cxa_demangle(mangled, nullptr, &demangled_size, &status);
+  demangled_size = std::min(demangled_size, out_size);
+  if (demangled_size != 0 && status == 0 && demangled != nullptr) {
+    std::memcpy(out, demangled, demangled_size);
+    out[out_size - 1] = '\0';
+    free(demangled);
+    return true;
+  }
+#endif
   State state;
   InitState(&state, mangled, out, out_size);
   return ParseTopLevelMangledName(&state) && !Overflowed(&state) &&
