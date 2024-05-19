@@ -15,6 +15,7 @@
 #
 
 find_library(LIBRT rt)
+set(LIBRT OFF)
 
 # Internal-only target, do not depend on directly.
 absl_cc_library(
