@@ -3529,7 +3529,7 @@ class raw_hash_set {
     if (SwisstableGenerationsEnabled()) {
       that.common().set_capacity(this == &that
                                      ? HashtableCapacity::CreateSelfMovedFrom()
-                                     : HashtableCapacity::CreateMovedFrom());
+                                     : DefaultCapacity());
     }
     if (!SwisstableGenerationsEnabled() ||
         !maybe_invalid_capacity().IsValid() ||
