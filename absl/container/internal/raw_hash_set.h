@@ -3076,7 +3076,7 @@ class raw_hash_set {
     // translation units but not in others.
     if (SwisstableGenerationsEnabled()) {
       that.common().set_capacity(this == &that ? InvalidCapacity::kSelfMovedFrom
-                                               : InvalidCapacity::kMovedFrom);
+                                               : DefaultCapacity());
     }
     if (!SwisstableGenerationsEnabled() || capacity() == DefaultCapacity() ||
         capacity() > kAboveMaxValidCapacity) {
