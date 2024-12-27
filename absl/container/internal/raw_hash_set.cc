@@ -311,8 +311,9 @@ void CommonFields::AnnotateForBugDetectionOnMoveImpl(
   if (!SwisstableGenerationsEnabled()) {
     return;
   }
-  that.set_capacity(this == &that ? HashtableCapacity::CreateSelfMovedFrom()
-                                  : HashtableCapacity::CreateMovedFrom());
+  that.set_capacity(
+      this == &that ? HashtableCapacity::CreateSelfMovedFrom()
+                    : HashtableCapacity{policy.alloc_policy->soo_capacity()});
   if (!maybe_invalid_capacity().IsValid() ||
       capacity() == policy.alloc_policy->soo_capacity()) {
     return;
