@@ -35,6 +35,7 @@ namespace functional_internal {
 union VoidPtr {
   const void* obj;
   void (*fun)();
+  unsigned char val[sizeof(void*)];
 };
 
 // Chooses the best type for passing T as an argument.
@@ -118,6 +119,12 @@ template <typename Fun, Fun F, typename R, typename... Args>
 R InvokeFunction(VoidPtr, typename ForwardT<Args>::type... args) {
   return static_cast<R>(
       F(std::forward<typename ForwardT<Args>::type>(args)...));
+}
+
+template <typename Val, typename R, typename... Args>
+R InvokeValue(VoidPtr ptr, typename ForwardT<Args>::type... args) {
+  auto v = reinterpret_cast<const Val*>(ptr.val);
+  return static_cast<R>(std::invoke(*v, std::forward<Args>(args)...));
 }
 
 template <typename Sig>
