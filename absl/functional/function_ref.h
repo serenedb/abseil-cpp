@@ -59,6 +59,8 @@
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 
+struct FunctionValue {};
+
 // FunctionRef
 //
 // Dummy class declaration to allow the partial specialization based on function
@@ -124,6 +126,23 @@ class ABSL_ATTRIBUTE_VIEW FunctionRef<R(Args...)> {
       : invoker_(&absl::functional_internal::InvokeFunction<F*, R, Args...>) {
     assert(f != nullptr);
     ptr_.fun = reinterpret_cast<decltype(ptr_.fun)>(f);
+  }
+
+  // Overload for trivially copyable functors. This allows storing such functors
+  // directly inside FunctionRef, enabling usage with member pointer calls on
+  // objects.
+  //
+  // While the same effect can be achieved by inheriting from a Base<Derived>
+  // class with R operator()(Args...), this approach is often inconvenient and
+  // unnecessarily cumbersome.
+  template <typename F, typename = EnableIfCompatible<const F&>>
+  FunctionRef(FunctionValue, F f)  // NOLINT(runtime/explicit)
+      : invoker_(&absl::functional_internal::InvokeValue<F, R, Args...>) {
+    static_assert(alignof(decltype(ptr_)) >= alignof(F));
+    static_assert(sizeof(ptr_.val) >= sizeof(F));
+    static_assert(std::is_trivially_copyable_v<F>);
+    absl::functional_internal::AssertNonNull(f);
+    new (&ptr_.val) F{f};
   }
 
 #if ABSL_INTERNAL_CPLUSPLUS_LANG >= 202002L
