@@ -39,7 +39,6 @@
 #define ABSL_FUNCTIONAL_OVERLOAD_H_
 
 #include "absl/base/config.h"
-#include "absl/meta/type_traits.h"
 
 namespace absl {
 ABSL_NAMESPACE_BEGIN
@@ -47,24 +46,7 @@ ABSL_NAMESPACE_BEGIN
 template <typename... T>
 struct Overload final : T... {
   using T::operator()...;
-
-  // For historical reasons we want to support use that looks like a function
-  // call:
-  //
-  //     absl::Overload(lambda_1, lambda_2)
-  //
-  // This works automatically in C++20 because we have support for parenthesized
-  // aggregate initialization. Before then we must provide a constructor that
-  // makes this work.
-  //
-  constexpr explicit Overload(T... ts) : T(std::move(ts))... {}
 };
-
-// Before C++20, which added support for CTAD for aggregate types, we must also
-// teach the compiler how to deduce the template arguments for Overload.
-//
-template <typename... T>
-Overload(T...) -> Overload<T...>;
 
 ABSL_NAMESPACE_END
 }  // namespace absl
