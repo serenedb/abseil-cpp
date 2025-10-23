@@ -18,6 +18,7 @@
 #ifndef ABSL_BASE_INTERNAL_ENDIAN_H_
 #define ABSL_BASE_INTERNAL_ENDIAN_H_
 
+#include <bit>
 #include <cstdint>
 #include <cstdlib>
 
@@ -30,40 +31,13 @@
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 
-constexpr uint64_t gbswap_64(uint64_t x) {
-#if ABSL_HAVE_BUILTIN(__builtin_bswap64) || defined(__GNUC__)
-  return __builtin_bswap64(x);
-#else
-  return (((x & uint64_t{0xFF}) << 56) |
-          ((x & uint64_t{0xFF00}) << 40) |
-          ((x & uint64_t{0xFF0000}) << 24) |
-          ((x & uint64_t{0xFF000000}) << 8) |
-          ((x & uint64_t{0xFF00000000}) >> 8) |
-          ((x & uint64_t{0xFF0000000000}) >> 24) |
-          ((x & uint64_t{0xFF000000000000}) >> 40) |
-          ((x & uint64_t{0xFF00000000000000}) >> 56));
-#endif
-}
+constexpr __uint128_t gbswap_128(__uint128_t x) { return std::byteswap(x); }
 
-constexpr uint32_t gbswap_32(uint32_t x) {
-#if ABSL_HAVE_BUILTIN(__builtin_bswap32) || defined(__GNUC__)
-  return __builtin_bswap32(x);
-#else
-  return (((x & uint32_t{0xFF}) << 24) |
-          ((x & uint32_t{0xFF00}) << 8) |
-          ((x & uint32_t{0xFF0000}) >> 8) |
-          ((x & uint32_t{0xFF000000}) >> 24));
-#endif
-}
+constexpr uint64_t gbswap_64(uint64_t x) { return std::byteswap(x); }
 
-constexpr uint16_t gbswap_16(uint16_t x) {
-#if ABSL_HAVE_BUILTIN(__builtin_bswap16) || defined(__GNUC__)
-  return __builtin_bswap16(x);
-#else
-  return (((x & uint16_t{0xFF}) << 8) |
-          ((x & uint16_t{0xFF00}) >> 8));
-#endif
-}
+constexpr uint32_t gbswap_32(uint32_t x) { return std::byteswap(x); }
+
+constexpr uint16_t gbswap_16(uint16_t x) { return std::byteswap(x); }
 
 #ifdef ABSL_IS_LITTLE_ENDIAN
 
@@ -109,6 +83,9 @@ inline uint32_t ToHost32(uint32_t x) { return x; }
 inline uint64_t FromHost64(uint64_t x) { return x; }
 inline uint64_t ToHost64(uint64_t x) { return x; }
 
+inline __uint128_t FromHost128(__uint128_t x) { return x; }
+inline __uint128_t ToHost128(__uint128_t x) { return x; }
+
 inline constexpr bool IsLittleEndian() { return true; }
 
 #elif defined ABSL_IS_BIG_ENDIAN
@@ -122,6 +99,9 @@ inline uint32_t ToHost32(uint32_t x) { return gbswap_32(x); }
 inline uint64_t FromHost64(uint64_t x) { return gbswap_64(x); }
 inline uint64_t ToHost64(uint64_t x) { return gbswap_64(x); }
 
+inline __uint128_t FromHost128(__uint128_t x) { return gbswap_128(x); }
+inline __uint128_t ToHost128(__uint128_t x) { return gbswap_128(x); }
+
 inline constexpr bool IsLittleEndian() { return false; }
 
 #endif /* ENDIAN */
@@ -130,10 +110,12 @@ inline uint8_t FromHost(uint8_t x) { return x; }
 inline uint16_t FromHost(uint16_t x) { return FromHost16(x); }
 inline uint32_t FromHost(uint32_t x) { return FromHost32(x); }
 inline uint64_t FromHost(uint64_t x) { return FromHost64(x); }
+inline __uint128_t FromHost(__uint128_t x) { return FromHost128(x); }
 inline uint8_t ToHost(uint8_t x) { return x; }
 inline uint16_t ToHost(uint16_t x) { return ToHost16(x); }
 inline uint32_t ToHost(uint32_t x) { return ToHost32(x); }
 inline uint64_t ToHost(uint64_t x) { return ToHost64(x); }
+inline __uint128_t ToHost(__uint128_t x) { return ToHost128(x); }
 
 inline int8_t FromHost(int8_t x) { return x; }
 inline int16_t FromHost(int16_t x) {
@@ -145,6 +127,9 @@ inline int32_t FromHost(int32_t x) {
 inline int64_t FromHost(int64_t x) {
   return bit_cast<int64_t>(FromHost64(bit_cast<uint64_t>(x)));
 }
+inline __int128_t FromHost(__int128_t x) {
+  return bit_cast<__int128_t>(FromHost128(bit_cast<__uint128_t>(x)));
+}
 inline int8_t ToHost(int8_t x) { return x; }
 inline int16_t ToHost(int16_t x) {
   return bit_cast<int16_t>(ToHost16(bit_cast<uint16_t>(x)));
@@ -154,6 +139,9 @@ inline int32_t ToHost(int32_t x) {
 }
 inline int64_t ToHost(int64_t x) {
   return bit_cast<int64_t>(ToHost64(bit_cast<uint64_t>(x)));
+}
+inline __int128_t ToHost(__int128_t x) {
+  return bit_cast<__int128_t>(ToHost128(bit_cast<__uint128_t>(x)));
 }
 
 // Functions to do unaligned loads and stores in little-endian order.
@@ -181,6 +169,14 @@ inline void Store64(void* absl_nonnull p, uint64_t v) {
   ABSL_INTERNAL_UNALIGNED_STORE64(p, FromHost64(v));
 }
 
+inline __uint128_t Load128(const void* absl_nonnull p) {
+  return ToHost128(ABSL_INTERNAL_UNALIGNED_LOAD128(p));
+}
+
+inline void Store128(void* absl_nonnull p, __uint128_t v) {
+  ABSL_INTERNAL_UNALIGNED_STORE128(p, FromHost128(v));
+}
+
 }  // namespace little_endian
 
 // Utilities to convert numbers between the current hosts's native byte
@@ -199,6 +195,9 @@ inline uint32_t ToHost32(uint32_t x) { return gbswap_32(x); }
 inline uint64_t FromHost64(uint64_t x) { return gbswap_64(x); }
 inline uint64_t ToHost64(uint64_t x) { return gbswap_64(x); }
 
+inline __uint128_t FromHost128(__uint128_t x) { return gbswap_128(x); }
+inline __uint128_t ToHost128(__uint128_t x) { return gbswap_128(x); }
+
 inline constexpr bool IsLittleEndian() { return true; }
 
 #elif defined ABSL_IS_BIG_ENDIAN
@@ -212,6 +211,9 @@ inline uint32_t ToHost32(uint32_t x) { return x; }
 inline uint64_t FromHost64(uint64_t x) { return x; }
 inline uint64_t ToHost64(uint64_t x) { return x; }
 
+inline __uint128_t FromHost128(__uint128_t x) { return x; }
+inline __uint128_t ToHost128(__uint128_t x) { return x; }
+
 inline constexpr bool IsLittleEndian() { return false; }
 
 #endif /* ENDIAN */
@@ -220,10 +222,12 @@ inline uint8_t FromHost(uint8_t x) { return x; }
 inline uint16_t FromHost(uint16_t x) { return FromHost16(x); }
 inline uint32_t FromHost(uint32_t x) { return FromHost32(x); }
 inline uint64_t FromHost(uint64_t x) { return FromHost64(x); }
+inline __uint128_t FromHost(__uint128_t x) { return FromHost128(x); }
 inline uint8_t ToHost(uint8_t x) { return x; }
 inline uint16_t ToHost(uint16_t x) { return ToHost16(x); }
 inline uint32_t ToHost(uint32_t x) { return ToHost32(x); }
 inline uint64_t ToHost(uint64_t x) { return ToHost64(x); }
+inline __uint128_t ToHost(__uint128_t x) { return ToHost128(x); }
 
 inline int8_t FromHost(int8_t x) { return x; }
 inline int16_t FromHost(int16_t x) {
@@ -235,6 +239,9 @@ inline int32_t FromHost(int32_t x) {
 inline int64_t FromHost(int64_t x) {
   return bit_cast<int64_t>(FromHost64(bit_cast<uint64_t>(x)));
 }
+inline __int128_t FromHost(__int128_t x) {
+  return bit_cast<__int128_t>(FromHost128(bit_cast<__uint128_t>(x)));
+}
 inline int8_t ToHost(int8_t x) { return x; }
 inline int16_t ToHost(int16_t x) {
   return bit_cast<int16_t>(ToHost16(bit_cast<uint16_t>(x)));
@@ -244,6 +251,9 @@ inline int32_t ToHost(int32_t x) {
 }
 inline int64_t ToHost(int64_t x) {
   return bit_cast<int64_t>(ToHost64(bit_cast<uint64_t>(x)));
+}
+inline __int128_t ToHost(__int128_t x) {
+  return bit_cast<__int128_t>(ToHost128(bit_cast<__uint128_t>(x)));
 }
 
 // Functions to do unaligned loads and stores in big-endian order.
@@ -269,6 +279,14 @@ inline uint64_t Load64(const void* absl_nonnull p) {
 
 inline void Store64(void* absl_nonnull p, uint64_t v) {
   ABSL_INTERNAL_UNALIGNED_STORE64(p, FromHost64(v));
+}
+
+inline __uint128_t Load128(const void* absl_nonnull p) {
+  return ToHost128(ABSL_INTERNAL_UNALIGNED_LOAD128(p));
+}
+
+inline void Store128(void* absl_nonnull p, __uint128_t v) {
+  ABSL_INTERNAL_UNALIGNED_STORE128(p, FromHost128(v));
 }
 
 }  // namespace big_endian
