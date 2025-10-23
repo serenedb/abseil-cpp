@@ -177,6 +177,40 @@ inline void Store128(void* absl_nonnull p, __uint128_t v) {
   ABSL_INTERNAL_UNALIGNED_STORE128(p, FromHost128(v));
 }
 
+template <typename T>
+T Load(const void* absl_nonnull p) {
+  if constexpr (sizeof(T) == 1) {
+    return *static_cast<const T*>(p);
+  } else if constexpr (sizeof(T) == 2) {
+    return bit_cast<T>(Load16(p));
+  } else if constexpr (sizeof(T) == 4) {
+    return bit_cast<T>(Load32(p));
+  } else if constexpr (sizeof(T) == 8) {
+    return bit_cast<T>(Load64(p));
+  } else if constexpr (sizeof(T) == 16) {
+    return bit_cast<T>(Load128(p));
+  } else {
+    static_assert(false);
+  }
+}
+
+template <typename T>
+void Store(void* absl_nonnull p, T v) {
+  if constexpr (sizeof(T) == 1) {
+    *static_cast<T*>(p) = v;
+  } else if constexpr (sizeof(T) == 2) {
+    Store16(p, bit_cast<uint16_t>(v));
+  } else if constexpr (sizeof(T) == 4) {
+    Store32(p, bit_cast<uint32_t>(v));
+  } else if constexpr (sizeof(T) == 8) {
+    Store64(p, bit_cast<uint64_t>(v));
+  } else if constexpr (sizeof(T) == 16) {
+    Store128(p, bit_cast<__uint128_t>(v));
+  } else {
+    static_assert(false);
+  }
+}
+
 }  // namespace little_endian
 
 // Utilities to convert numbers between the current hosts's native byte
@@ -287,6 +321,40 @@ inline __uint128_t Load128(const void* absl_nonnull p) {
 
 inline void Store128(void* absl_nonnull p, __uint128_t v) {
   ABSL_INTERNAL_UNALIGNED_STORE128(p, FromHost128(v));
+}
+
+template <typename T>
+T Load(const void* absl_nonnull p) {
+  if constexpr (sizeof(T) == 1) {
+    return *static_cast<const T*>(p);
+  } else if constexpr (sizeof(T) == 2) {
+    return bit_cast<T>(Load16(p));
+  } else if constexpr (sizeof(T) == 4) {
+    return bit_cast<T>(Load32(p));
+  } else if constexpr (sizeof(T) == 8) {
+    return bit_cast<T>(Load64(p));
+  } else if constexpr (sizeof(T) == 16) {
+    return bit_cast<T>(Load128(p));
+  } else {
+    static_assert(false);
+  }
+}
+
+template <typename T>
+void Store(void* absl_nonnull p, T v) {
+  if constexpr (sizeof(T) == 1) {
+    *static_cast<T*>(p) = v;
+  } else if constexpr (sizeof(T) == 2) {
+    Store16(p, bit_cast<uint16_t>(v));
+  } else if constexpr (sizeof(T) == 4) {
+    Store32(p, bit_cast<uint32_t>(v));
+  } else if constexpr (sizeof(T) == 8) {
+    Store64(p, bit_cast<uint64_t>(v));
+  } else if constexpr (sizeof(T) == 16) {
+    Store128(p, bit_cast<__uint128_t>(v));
+  } else {
+    static_assert(false);
+  }
 }
 
 }  // namespace big_endian
