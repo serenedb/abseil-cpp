@@ -468,15 +468,12 @@ void CEscapeAndAppendInternal(absl::string_view src,
       });
 }
 
+}  // namespace
+
 // The two strings below provide maps from normal 6-bit characters to their
 // base64-escaped equivalent.
 // For the inverse case, see kUn(WebSafe)Base64 in the external
 // escaping.cc.
-constexpr char kBase64Chars[] =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-constexpr char kWebSafeBase64Chars[] =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 // ----------------------------------------------------------------------
 //   Take the input in groups of 4 characters and turn each
@@ -609,6 +606,8 @@ size_t Base64EscapeInternal(const unsigned char* src, size_t szsrc, char* dest,
   }
   return static_cast<size_t>(cur_dest - dest);
 }
+
+namespace {
 
 std::string Base64EscapeToStringInternal(const unsigned char* src, size_t szsrc,
                                          bool do_padding,
