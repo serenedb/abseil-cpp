@@ -1330,9 +1330,7 @@ class CommonFields : public CommonFieldsGenerationInfo {
     return inline_data_.capacity();
   }
   void set_capacity(HashtableCapacity c) { inline_data_.set_capacity(c); }
-  void set_capacity(size_t c) {
-    set_capacity(HashtableCapacity(c));
-  }
+  void set_capacity(size_t c) { set_capacity(HashtableCapacity(c)); }
   bool is_small() const { return inline_data_.is_small(); }
 
   GrowthInfoAccessor growth_info() const {
@@ -2330,7 +2328,7 @@ class raw_hash_set {
     using value_type = typename raw_hash_set::value_type;
     using reference =
         std::conditional_t<PolicyTraits::constant_iterators::value,
-                            const value_type&, value_type&>;
+                           const value_type&, value_type&>;
     using pointer = std::remove_reference_t<reference>*;
     using difference_type = typename raw_hash_set::difference_type;
 
@@ -2496,10 +2494,9 @@ class raw_hash_set {
       std::is_nothrow_default_constructible_v<key_equal> &&
       std::is_nothrow_default_constructible_v<allocator_type>) {}
 
-  explicit raw_hash_set(
-      size_t bucket_count, const hasher& hash = hasher(),
-      const key_equal& eq = key_equal(),
-      const allocator_type& alloc = allocator_type())
+  explicit raw_hash_set(size_t bucket_count, const hasher& hash = hasher(),
+                        const key_equal& eq = key_equal(),
+                        const allocator_type& alloc = allocator_type())
       : settings_(CommonFields::CreateDefault<SooEnabled()>(), hash, eq,
                   alloc) {
     if (bucket_count > DefaultCapacity()) {
@@ -3082,8 +3079,7 @@ class raw_hash_set {
 
     if (src.is_small()) {
       if (src.empty()) return;
-      if (insert_slot(src.single_slot()))
-        src.erase_meta_only_small();
+      if (insert_slot(src.single_slot())) src.erase_meta_only_small();
       return;
     }
     for (auto it = src.begin(), e = src.end(); it != e;) {
@@ -3176,8 +3172,7 @@ class raw_hash_set {
 
   template <class K = key_type>
   ABSL_DEPRECATE_AND_INLINE()
-  iterator find(const key_arg<K>& key,
-                size_t) ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  iterator find(const key_arg<K>& key, size_t) ABSL_ATTRIBUTE_LIFETIME_BOUND {
     return find(key);
   }
   // The API of find() has one extension: the type of the key argument doesn't
@@ -3192,8 +3187,8 @@ class raw_hash_set {
 
   template <class K = key_type>
   ABSL_DEPRECATE_AND_INLINE()
-  const_iterator find(const key_arg<K>& key,
-                      size_t) const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  const_iterator
+      find(const key_arg<K>& key, size_t) const ABSL_ATTRIBUTE_LIFETIME_BOUND {
     return find(key);
   }
   template <class K = key_type>
@@ -3513,7 +3508,7 @@ class raw_hash_set {
     if (SwisstableGenerationsEnabled()) {
       that.common().set_capacity(this == &that
                                      ? HashtableCapacity::CreateSelfMovedFrom()
-                                     : DefaultCapacity());
+                                     : HashtableCapacity{DefaultCapacity()});
     }
     if (!SwisstableGenerationsEnabled() ||
         !maybe_invalid_capacity().IsValid() ||
@@ -3994,16 +3989,16 @@ struct HashtableFreeFunctionsAccess {
     [[maybe_unused]] const size_t original_size_for_assert = c->size();
     size_t num_deleted = 0;
     using SlotType = typename Set::slot_type;
-    IterateOverFullSlots(
-        c->common(), sizeof(SlotType),
-        [&](const ctrl_t* ctrl, void* slot_void) {
-          auto* slot = static_cast<SlotType*>(slot_void);
-          if (pred(Set::PolicyTraits::element(slot))) {
-            c->destroy(slot);
-            EraseMetaOnlyLarge(c->common(), ctrl, sizeof(*slot));
-            ++num_deleted;
-          }
-        });
+    IterateOverFullSlots(c->common(), sizeof(SlotType),
+                         [&](const ctrl_t* ctrl, void* slot_void) {
+                           auto* slot = static_cast<SlotType*>(slot_void);
+                           if (pred(Set::PolicyTraits::element(slot))) {
+                             c->destroy(slot);
+                             EraseMetaOnlyLarge(c->common(), ctrl,
+                                                sizeof(*slot));
+                             ++num_deleted;
+                           }
+                         });
     // NOTE: IterateOverFullSlots allow removal of the current element, so we
     // verify the size additionally here.
     ABSL_SWISSTABLE_ASSERT(original_size_for_assert - num_deleted ==
