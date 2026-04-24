@@ -729,7 +729,8 @@ static const Mutex::MuHow kExclusive = &kExclusiveS;  // exclusive lock
 #ifdef NDEBUG
 static constexpr bool kDebugMode = false;
 #else
-static constexpr bool kDebugMode = true;
+// TODO(mbkkt) enable it when we fix too much mutexes lock/unlock
+static constexpr bool kDebugMode = false;
 #endif
 
 #ifdef ABSL_INTERNAL_HAVE_TSAN_INTERFACE
