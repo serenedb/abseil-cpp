@@ -4033,7 +4033,11 @@ class raw_hash_set {
         std::is_scalar_v<key_type> &&
         std::is_same_v<hasher, absl::Hash<key_type>> &&
         std::is_same_v<key_equal, std::equal_to<key_type>>;
-    if constexpr (kIsDebug && !kIsStringAbslHashEq && !kIsScalarAbslHashEq) {
+    constexpr bool kSkipsCheck = requires {
+      typename hasher::skip_absl_hash_eq_consistent;
+    } || requires { typename key_equal::skip_absl_hash_eq_consistent; };
+    if constexpr (kIsDebug && !kIsStringAbslHashEq && !kIsScalarAbslHashEq &&
+                  !kSkipsCheck) {
       if (empty()) return;
       AssertHashEqConsistentImpl(common(), &hash_ref(), get_hash_slot_fn(),
                                  sizeof(slot_type), SooEnabled(), hash_of(key),
