@@ -3698,17 +3698,17 @@ class raw_hash_set {
   // meaning that `eq(k1, k2)` implies `hash(k1)==hash(k2)`.
   template <class K>
   void AssertHashEqConsistent(const K& key) {
-#ifdef NDEBUG
-    return;
-#endif
+#ifndef NDEBUG
     // If the hash/eq functors are known to be consistent, then skip validation.
-    if (std::is_same_v<hasher, absl::container_internal::StringHash> &&
-        std::is_same_v<key_equal, absl::container_internal::StringEq>) {
+    if constexpr (std::is_same_v<hasher,
+                               absl::container_internal::StringHash> &&
+                  std::is_same_v<key_equal,
+                               absl::container_internal::StringEq>) {
       return;
     }
-    if (std::is_scalar_v<key_type> &&
-        std::is_same_v<hasher, absl::Hash<key_type>> &&
-        std::is_same_v<key_equal, std::equal_to<key_type>>) {
+    if constexpr (std::is_scalar_v<key_type> &&
+                  std::is_same_v<hasher, absl::Hash<key_type>> &&
+                  std::is_same_v<key_equal, std::equal_to<key_type>>) {
       return;
     }
     if (empty()) return;
@@ -3729,9 +3729,18 @@ class raw_hash_set {
       assert_consistent(/*unused*/ nullptr, single_slot());
       return;
     }
+    if constexpr (requires { typename hasher::skip_absl_hash_eq_consistent; }) {
+      return;
+    }
+    if constexpr (requires {
+                    typename key_equal::skip_absl_hash_eq_consistent;
+                  }) {
+      return;
+    }
     // We only do validation for small tables so that it's constant time.
     if (capacity() > 16) return;
     IterateOverFullSlots(common(), sizeof(slot_type), assert_consistent);
+#endif
   }
 
   // Attempts to find `key` in the table; if it isn't found, returns an iterator
