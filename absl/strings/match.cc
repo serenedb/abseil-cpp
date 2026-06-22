@@ -30,10 +30,33 @@ ABSL_NAMESPACE_BEGIN
 
 bool EqualsIgnoreCase(absl::string_view piece1,
                       absl::string_view piece2) noexcept {
-  return (piece1.size() == piece2.size() &&
-          0 == absl::strings_internal::memcasecmp(piece1.data(), piece2.data(),
-                                                  piece1.size()));
-  // memcasecmp uses absl::ascii_tolower().
+  const size_t n = piece1.size();
+  if (n != piece2.size()) {
+    return false;
+  }
+  const char* a = piece1.data();
+  const char* b = piece2.data();
+  size_t i = 0;
+  for (; i + 8 <= n; i += 8) {
+    if (strings_internal::ToLowerAscii64(little_endian::Load64(a + i)) !=
+        strings_internal::ToLowerAscii64(little_endian::Load64(b + i))) {
+      return false;
+    }
+  }
+  if (i < n) {
+    if (n >= 8) {
+      const size_t t = n - 8;
+      return strings_internal::ToLowerAscii64(little_endian::Load64(a + t)) ==
+             strings_internal::ToLowerAscii64(little_endian::Load64(b + t));
+    }
+    for (; i < n; ++i) {
+      if (strings_internal::ToLowerAscii8(static_cast<uint8_t>(a[i])) !=
+          strings_internal::ToLowerAscii8(static_cast<uint8_t>(b[i]))) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 bool StrContainsIgnoreCase(absl::string_view haystack,
