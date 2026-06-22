@@ -207,6 +207,11 @@
 // built with inconsistent flags.
 //
 // User code should not inspect this macro.
-#define ABSL_OPTION_INLINE_HW_ACCEL_STRATEGY 0
+// SereneDB: 1 = REQUIRE HW-accelerated (CRC32/AES) hash in headers. All TUs build
+// from source with the same hash-relevant flags (-msse4.2/-maes, uniform even on the
+// avx512/fapprox-math special targets), so the requirement is always met -- and 1
+// (vs 2) ENFORCES uniformity: any TU lacking the instructions becomes a build error
+// instead of a silent scalar fallback that would ODR-diverge from HW-path TUs.
+#define ABSL_OPTION_INLINE_HW_ACCEL_STRATEGY 1
 
 #endif  // ABSL_BASE_OPTIONS_H_
