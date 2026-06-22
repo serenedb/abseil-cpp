@@ -195,6 +195,22 @@ uint64_t Mix4x16Vectors(Vector128 a, Vector128 b, Vector128 c, Vector128 d) {
 
 #endif  // ABSL_AES_INTERNAL_HAVE_X86_SIMD
 
+#ifdef ABSL_AES_INTERNAL_HAVE_X86_SIMD
+inline Vector128 ToLowerAscii128(Vector128 v) {
+  Vector128 biased = _mm_add_epi8(v, _mm_set1_epi8(int8_t(0x80 - 'A')));
+  Vector128 is_upper =
+      _mm_cmpgt_epi8(_mm_set1_epi8(int8_t('Z' + 0x80 - 'A' + 1)), biased);
+  return _mm_or_si128(v, _mm_and_si128(is_upper, _mm_set1_epi8(0x20)));
+}
+#elif defined(ABSL_AES_INTERNAL_HAVE_ARM_SIMD)
+inline Vector128 ToLowerAscii128(Vector128 v) {
+  uint8x16_t is_upper =
+      vandq_u8(vcgeq_u8(v, vdupq_n_u8('A')), vcleq_u8(v, vdupq_n_u8('Z')));
+  return vorrq_u8(v, vandq_u8(is_upper, vdupq_n_u8(0x20)));
+}
+#endif
+
+template <bool CaseInsensitive = false>
 uint64_t LowLevelHash33To64(uint64_t seed, const uint8_t* ptr, size_t len) {
   assert(len > 32);
   assert(len <= 64);
@@ -204,6 +220,12 @@ uint64_t LowLevelHash33To64(uint64_t seed, const uint8_t* ptr, size_t len) {
   auto* last32_ptr = ptr + len - 32;
   Vector128 c = Load128(last32_ptr);
   Vector128 d = Load128(last32_ptr + 16);
+  if constexpr (CaseInsensitive) {
+    a = ToLowerAscii128(a);
+    b = ToLowerAscii128(b);
+    c = ToLowerAscii128(c);
+    d = ToLowerAscii128(d);
+  }
 
   Vector128 na = MixA(a, state);
   Vector128 nb = MixB(b, state);
@@ -215,6 +237,7 @@ uint64_t LowLevelHash33To64(uint64_t seed, const uint8_t* ptr, size_t len) {
   return Mix4x16Vectors(na, nb, nc, nd);
 }
 
+template <bool CaseInsensitive = false>
 [[maybe_unused]] ABSL_ATTRIBUTE_NOINLINE uint64_t
 LowLevelHashLenGt64(uint64_t seed, const void* data, size_t len) {
   assert(len > 64);
@@ -235,20 +258,28 @@ LowLevelHashLenGt64(uint64_t seed, const void* data, size_t len) {
   // We combine state and data with _mm_add_epi64/_mm_sub_epi64 before applying
   // AES encryption to make hash function dependent on the order of the blocks.
   // See comments in LowLevelHash33To64 for more considerations.
-  auto mix_ab = [&state0,
-                 &state1](const uint8_t* p) ABSL_ATTRIBUTE_ALWAYS_INLINE {
-    Vector128 a = Load128(p);
-    Vector128 b = Load128(p + 16);
-    state0 = MixA(a, state0);
-    state1 = MixB(b, state1);
-  };
-  auto mix_cd = [&state2,
-                 &state3](const uint8_t* p) ABSL_ATTRIBUTE_ALWAYS_INLINE {
-    Vector128 c = Load128(p);
-    Vector128 d = Load128(p + 16);
-    state2 = MixC(c, state2);
-    state3 = MixD(d, state3);
-  };
+  auto mix_ab = [&state0, &state1](const uint8_t* p)
+                    ABSL_ATTRIBUTE_ALWAYS_INLINE {
+                      Vector128 a = Load128(p);
+                      Vector128 b = Load128(p + 16);
+                      if constexpr (CaseInsensitive) {
+                        a = ToLowerAscii128(a);
+                        b = ToLowerAscii128(b);
+                      }
+                      state0 = MixA(a, state0);
+                      state1 = MixB(b, state1);
+                    };
+  auto mix_cd = [&state2, &state3](const uint8_t* p)
+                    ABSL_ATTRIBUTE_ALWAYS_INLINE {
+                      Vector128 c = Load128(p);
+                      Vector128 d = Load128(p + 16);
+                      if constexpr (CaseInsensitive) {
+                        c = ToLowerAscii128(c);
+                        d = ToLowerAscii128(d);
+                      }
+                      state2 = MixC(c, state2);
+                      state3 = MixD(d, state3);
+                    };
 
   do {
     PrefetchFutureDataToLocalCache(ptr);
@@ -268,25 +299,38 @@ LowLevelHashLenGt64(uint64_t seed, const void* data, size_t len) {
   return Mix4x16Vectors(state0, state1, state2, state3);
 }
 #else
+template <bool CaseInsensitive = false>
+inline uint64_t Load64Impl(const uint8_t* ptr) {
+  uint64_t v = absl::base_internal::UnalignedLoad64(ptr);
+  if constexpr (CaseInsensitive) {
+    v = ToLowerAscii64(v);
+  }
+  return v;
+}
+
+template <bool CaseInsensitive = false>
 uint64_t Mix32Bytes(const uint8_t* ptr, uint64_t current_state) {
-  uint64_t a = absl::base_internal::UnalignedLoad64(ptr);
-  uint64_t b = absl::base_internal::UnalignedLoad64(ptr + 8);
-  uint64_t c = absl::base_internal::UnalignedLoad64(ptr + 16);
-  uint64_t d = absl::base_internal::UnalignedLoad64(ptr + 24);
+  uint64_t a = Load64Impl<CaseInsensitive>(ptr);
+  uint64_t b = Load64Impl<CaseInsensitive>(ptr + 8);
+  uint64_t c = Load64Impl<CaseInsensitive>(ptr + 16);
+  uint64_t d = Load64Impl<CaseInsensitive>(ptr + 24);
 
   uint64_t cs0 = Mix(a ^ kStaticRandomData[1], b ^ current_state);
   uint64_t cs1 = Mix(c ^ kStaticRandomData[2], d ^ current_state);
   return cs0 ^ cs1;
 }
 
+template <bool CaseInsensitive = false>
 uint64_t LowLevelHash33To64(uint64_t seed, const uint8_t* ptr, size_t len) {
   assert(len > 32);
   assert(len <= 64);
   uint64_t current_state = seed ^ kStaticRandomData[0] ^ len;
   const uint8_t* last_32_ptr = ptr + len - 32;
-  return Mix32Bytes(last_32_ptr, Mix32Bytes(ptr, current_state));
+  return Mix32Bytes<CaseInsensitive>(
+      last_32_ptr, Mix32Bytes<CaseInsensitive>(ptr, current_state));
 }
 
+template <bool CaseInsensitive = false>
 [[maybe_unused]] ABSL_ATTRIBUTE_NOINLINE uint64_t
 LowLevelHashLenGt64(uint64_t seed, const void* data, size_t len) {
   assert(len > 64);
@@ -303,14 +347,14 @@ LowLevelHashLenGt64(uint64_t seed, const void* data, size_t len) {
   do {
     PrefetchFutureDataToLocalCache(ptr);
 
-    uint64_t a = absl::base_internal::UnalignedLoad64(ptr);
-    uint64_t b = absl::base_internal::UnalignedLoad64(ptr + 8);
-    uint64_t c = absl::base_internal::UnalignedLoad64(ptr + 16);
-    uint64_t d = absl::base_internal::UnalignedLoad64(ptr + 24);
-    uint64_t e = absl::base_internal::UnalignedLoad64(ptr + 32);
-    uint64_t f = absl::base_internal::UnalignedLoad64(ptr + 40);
-    uint64_t g = absl::base_internal::UnalignedLoad64(ptr + 48);
-    uint64_t h = absl::base_internal::UnalignedLoad64(ptr + 56);
+    uint64_t a = Load64Impl<CaseInsensitive>(ptr);
+    uint64_t b = Load64Impl<CaseInsensitive>(ptr + 8);
+    uint64_t c = Load64Impl<CaseInsensitive>(ptr + 16);
+    uint64_t d = Load64Impl<CaseInsensitive>(ptr + 24);
+    uint64_t e = Load64Impl<CaseInsensitive>(ptr + 32);
+    uint64_t f = Load64Impl<CaseInsensitive>(ptr + 40);
+    uint64_t g = Load64Impl<CaseInsensitive>(ptr + 48);
+    uint64_t h = Load64Impl<CaseInsensitive>(ptr + 56);
 
     current_state = Mix(a ^ kStaticRandomData[1], b ^ current_state);
     duplicated_state0 = Mix(c ^ kStaticRandomData[2], d ^ duplicated_state0);
@@ -327,23 +371,25 @@ LowLevelHashLenGt64(uint64_t seed, const void* data, size_t len) {
   // We now have a data `ptr` with at most 64 bytes and the current state
   // of the hashing state machine stored in current_state.
   if (len > 32) {
-    current_state = Mix32Bytes(ptr, current_state);
+    current_state = Mix32Bytes<CaseInsensitive>(ptr, current_state);
   }
 
   // We now have a data `ptr` with at most 32 bytes and the current state
   // of the hashing state machine stored in current_state. But we can
   // safely read from `ptr + len - 32`.
-  return Mix32Bytes(last_32_ptr, current_state);
+  return Mix32Bytes<CaseInsensitive>(last_32_ptr, current_state);
 }
 #endif  // ABSL_AES_INTERNAL_HAVE_X86_SIMD
 
+template <bool CaseInsensitive = false>
 [[maybe_unused]] uint64_t LowLevelHashLenGt32(uint64_t seed, const void* data,
                                               size_t len) {
   assert(len > 32);
   if (ABSL_PREDICT_FALSE(len > 64)) {
-    return LowLevelHashLenGt64(seed, data, len);
+    return LowLevelHashLenGt64<CaseInsensitive>(seed, data, len);
   }
-  return LowLevelHash33To64(seed, static_cast<const uint8_t*>(data), len);
+  return LowLevelHash33To64<CaseInsensitive>(
+      seed, static_cast<const uint8_t*>(data), len);
 }
 
 ABSL_ATTRIBUTE_ALWAYS_INLINE inline uint64_t HashBlockOn32Bit(
@@ -372,20 +418,23 @@ SplitAndCombineOn32Bit(uint64_t state, const unsigned char* first, size_t len) {
                                std::integral_constant<int, 4>{});
 }
 
+template <bool CaseInsensitive = false>
 ABSL_ATTRIBUTE_ALWAYS_INLINE inline uint64_t HashBlockOn64Bit(
     uint64_t state, const unsigned char* data, size_t len) {
 #ifdef ABSL_HAVE_INTRINSIC_INT128
-  return LowLevelHashLenGt32(state, data, len);
+  return LowLevelHashLenGt32<CaseInsensitive>(state, data, len);
 #else
   return hash_internal::CityHash64WithSeed(reinterpret_cast<const char*>(data),
                                            len, state);
 #endif
 }
 
+template <bool CaseInsensitive = false>
 ABSL_ATTRIBUTE_NOINLINE uint64_t
 SplitAndCombineOn64Bit(uint64_t state, const unsigned char* first, size_t len) {
   while (len >= PiecewiseChunkSize()) {
-    state = HashBlockOn64Bit(state, first, PiecewiseChunkSize());
+    state =
+        HashBlockOn64Bit<CaseInsensitive>(state, first, PiecewiseChunkSize());
     len -= PiecewiseChunkSize();
     first += PiecewiseChunkSize();
   }
@@ -395,8 +444,8 @@ SplitAndCombineOn64Bit(uint64_t state, const unsigned char* first, size_t len) {
     return state;
   }
   // Handle the remainder.
-  return CombineContiguousImpl(state, first, len,
-                               std::integral_constant<int, 8>{});
+  return CombineContiguousImpl<CaseInsensitive>(
+      state, first, len, std::integral_constant<int, 8>{});
 }
 
 }  // namespace
@@ -412,15 +461,26 @@ uint64_t CombineLargeContiguousImplOn32BitLengthGt8(uint64_t state,
   return SplitAndCombineOn32Bit(state, first, len);
 }
 
+template <bool CaseInsensitive>
 uint64_t CombineLargeContiguousImplOn64BitLengthGt32(uint64_t state,
                                                      const unsigned char* first,
                                                      size_t len) {
   assert(len > 32);
   assert(sizeof(size_t) == 8);  // NOLINT(misc-static-assert)
   if (ABSL_PREDICT_TRUE(len <= PiecewiseChunkSize())) {
-    return HashBlockOn64Bit(state, first, len);
+    return HashBlockOn64Bit<CaseInsensitive>(state, first, len);
   }
-  return SplitAndCombineOn64Bit(state, first, len);
+  return SplitAndCombineOn64Bit<CaseInsensitive>(state, first, len);
+}
+
+template uint64_t CombineLargeContiguousImplOn64BitLengthGt32<false>(
+    uint64_t state, const unsigned char* first, size_t len);
+
+uint64_t CaseInsensitiveHash64(const char* data, size_t len) {
+  const unsigned char* first = reinterpret_cast<const unsigned char*>(data);
+  uint64_t seed = kStaticRandomData[0];
+  return CombineContiguousImpl<true>(seed, first, len,
+                                     std::integral_constant<int, 8>{});
 }
 
 ABSL_CONST_INIT const void* const MixingHashState::kSeed = &kSeed;
