@@ -87,6 +87,7 @@
 #include "absl/meta/type_traits.h"
 #include "absl/numeric/bits.h"
 #include "absl/numeric/int128.h"
+#include "absl/strings/internal/memutil.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
@@ -1127,6 +1128,13 @@ inline uint32_t Read1To3(const unsigned char* p, size_t len) {
   return mem0 | mem1;
 }
 
+using strings_internal::ToLowerAscii16;
+using strings_internal::ToLowerAscii32;
+using strings_internal::ToLowerAscii64;
+using strings_internal::ToLowerAscii8;
+
+uint64_t CaseInsensitiveHash64(const char* data, size_t len);
+
 #ifdef ABSL_HASH_INTERNAL_HAS_CRC32
 
 ABSL_ATTRIBUTE_ALWAYS_INLINE inline uint64_t CombineRawImpl(uint64_t state,
@@ -1179,18 +1187,28 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE inline uint64_t CombineRawImpl(uint64_t state,
 uint64_t CombineLargeContiguousImplOn32BitLengthGt8(uint64_t state,
                                                     const unsigned char* first,
                                                     size_t len);
+template <bool CaseInsensitive = false>
 uint64_t CombineLargeContiguousImplOn64BitLengthGt32(uint64_t state,
                                                      const unsigned char* first,
                                                      size_t len);
 
+template <bool CaseInsensitive = false>
 ABSL_ATTRIBUTE_ALWAYS_INLINE inline uint64_t CombineSmallContiguousImpl(
     uint64_t state, const unsigned char* first, size_t len) {
   ABSL_ASSUME(len <= 8);
   uint64_t v;
   if (len >= 4) {
-    v = Read4To8(first, len);
+    uint64_t w = Read4To8(first, len);
+    if constexpr (CaseInsensitive) {
+      w = ToLowerAscii64(w);
+    }
+    v = w;
   } else if (len > 0) {
-    v = Read1To3(first, len);
+    uint32_t w = Read1To3(first, len);
+    if constexpr (CaseInsensitive) {
+      w = ToLowerAscii32(w);
+    }
+    v = w;
   } else {
     // Empty string must modify the state.
     v = 0x57;
@@ -1198,6 +1216,7 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE inline uint64_t CombineSmallContiguousImpl(
   return CombineRawImpl(state, v);
 }
 
+template <bool CaseInsensitive = false>
 ABSL_ATTRIBUTE_ALWAYS_INLINE inline uint64_t CombineContiguousImpl9to16(
     uint64_t state, const unsigned char* first, size_t len) {
   ABSL_ASSUME(len >= 9);
@@ -1208,21 +1227,35 @@ ABSL_ATTRIBUTE_ALWAYS_INLINE inline uint64_t CombineContiguousImpl9to16(
   // exactly 16 -- for smaller sizes there is an overlapping byte that makes
   // this impossible unless the seed is *also* incredibly unlucky.
   auto p = Read9To16(first, len);
-  return Mix(state ^ p.first, kMul ^ p.second);
+  uint64_t pf = p.first;
+  uint64_t ps = p.second;
+  if constexpr (CaseInsensitive) {
+    pf = ToLowerAscii64(pf);
+    ps = ToLowerAscii64(ps);
+  }
+  return Mix(state ^ pf, kMul ^ ps);
 }
 
+template <bool CaseInsensitive = false>
 ABSL_ATTRIBUTE_ALWAYS_INLINE inline uint64_t CombineContiguousImpl17to32(
     uint64_t state, const unsigned char* first, size_t len) {
   ABSL_ASSUME(len >= 17);
   ABSL_ASSUME(len <= 32);
   // Do two mixes of overlapping 16-byte ranges in parallel to minimize
   // latency.
-  const uint64_t m0 =
-      Mix(Read8(first) ^ kStaticRandomData[1], Read8(first + 8) ^ state);
-
+  uint64_t a0 = Read8(first);
+  uint64_t a1 = Read8(first + 8);
   const unsigned char* tail_16b_ptr = first + (len - 16);
-  const uint64_t m1 = Mix(Read8(tail_16b_ptr) ^ kStaticRandomData[3],
-                          Read8(tail_16b_ptr + 8) ^ state);
+  uint64_t a2 = Read8(tail_16b_ptr);
+  uint64_t a3 = Read8(tail_16b_ptr + 8);
+  if constexpr (CaseInsensitive) {
+    a0 = ToLowerAscii64(a0);
+    a1 = ToLowerAscii64(a1);
+    a2 = ToLowerAscii64(a2);
+    a3 = ToLowerAscii64(a3);
+  }
+  const uint64_t m0 = Mix(a0 ^ kStaticRandomData[1], a1 ^ state);
+  const uint64_t m1 = Mix(a2 ^ kStaticRandomData[3], a3 ^ state);
   return m0 ^ m1;
 }
 
@@ -1243,11 +1276,13 @@ inline uint64_t CombineContiguousImpl(
 }
 
 #ifdef ABSL_HASH_INTERNAL_HAS_CRC32
+template <bool CaseInsensitive = false>
 inline uint64_t CombineContiguousImpl(
     uint64_t state, const unsigned char* first, size_t len,
     std::integral_constant<int, 8> /* sizeof_size_t */) {
   if (ABSL_PREDICT_FALSE(len > 32)) {
-    return CombineLargeContiguousImplOn64BitLengthGt32(state, first, len);
+    return CombineLargeContiguousImplOn64BitLengthGt32<CaseInsensitive>(
+        state, first, len);
   }
   // `mul` is the salt that is used for final mixing. It is important to fill
   // high 32 bits because CRC wipes out high 32 bits.
@@ -1269,12 +1304,24 @@ inline uint64_t CombineContiguousImpl(
   // reading the memory. Fused instructions also reduce register pressure
   // allowing surrounding code to be more efficient when this code is inlined.
   if (len > 8) {
-    crcs = {ABSL_HASH_INTERNAL_CRC32_U64(crcs.first, Read8(first)),
-            ABSL_HASH_INTERNAL_CRC32_U64(crcs.second, Read8(first + len - 8))};
+    uint64_t w0 = Read8(first);
+    uint64_t w1 = Read8(first + len - 8);
+    if constexpr (CaseInsensitive) {
+      w0 = ToLowerAscii64(w0);
+      w1 = ToLowerAscii64(w1);
+    }
+    crcs = {ABSL_HASH_INTERNAL_CRC32_U64(crcs.first, w0),
+            ABSL_HASH_INTERNAL_CRC32_U64(crcs.second, w1)};
     if (len > 16) {
       // We compute the second round of dependent CRC32 operations.
-      crcs = {ABSL_HASH_INTERNAL_CRC32_U64(crcs.first, Read8(first + len - 16)),
-              ABSL_HASH_INTERNAL_CRC32_U64(crcs.second, Read8(first + 8))};
+      uint64_t w2 = Read8(first + len - 16);
+      uint64_t w3 = Read8(first + 8);
+      if constexpr (CaseInsensitive) {
+        w2 = ToLowerAscii64(w2);
+        w3 = ToLowerAscii64(w3);
+      }
+      crcs = {ABSL_HASH_INTERNAL_CRC32_U64(crcs.first, w2),
+              ABSL_HASH_INTERNAL_CRC32_U64(crcs.second, w3)};
     }
   } else {
     if (len >= 4) {
@@ -1283,21 +1330,33 @@ inline uint64_t CombineContiguousImpl(
       // Using `xor` or `add` may reduce latency for this case, but would
       // require more registers, more instructions and will have worse hash
       // quality.
-      crcs = {ABSL_HASH_INTERNAL_CRC32_U32(static_cast<uint32_t>(crcs.first),
-                                           Read4(first)),
-              ABSL_HASH_INTERNAL_CRC32_U32(static_cast<uint32_t>(crcs.second),
-                                           Read4(first + len - 4))};
+      uint32_t w0 = Read4(first);
+      uint32_t w1 = Read4(first + len - 4);
+      if constexpr (CaseInsensitive) {
+        w0 = ToLowerAscii32(w0);
+        w1 = ToLowerAscii32(w1);
+      }
+      crcs = {
+          ABSL_HASH_INTERNAL_CRC32_U32(static_cast<uint32_t>(crcs.first), w0),
+          ABSL_HASH_INTERNAL_CRC32_U32(static_cast<uint32_t>(crcs.second), w1)};
     } else if (len >= 1) {
       // We mix three bytes all into different output registers.
       // This way, we do not need shifting of these bytes (so they don't overlap
       // with each other).
-      crcs = {ABSL_HASH_INTERNAL_CRC32_U8(static_cast<uint32_t>(crcs.first),
-                                          first[0]),
-              ABSL_HASH_INTERNAL_CRC32_U8(static_cast<uint32_t>(crcs.second),
-                                          first[len - 1])};
+      uint8_t b0 = first[0];
+      uint8_t bm = first[len / 2];
+      uint8_t b1 = first[len - 1];
+      if constexpr (CaseInsensitive) {
+        b0 = ToLowerAscii8(b0);
+        bm = ToLowerAscii8(bm);
+        b1 = ToLowerAscii8(b1);
+      }
+      crcs = {
+          ABSL_HASH_INTERNAL_CRC32_U8(static_cast<uint32_t>(crcs.first), b0),
+          ABSL_HASH_INTERNAL_CRC32_U8(static_cast<uint32_t>(crcs.second), b1)};
       // Middle byte is mixed weaker. It is a new byte only for len == 3.
       // Mixing is independent from CRC operations so it is scheduled ASAP.
-      mul += first[len / 2];
+      mul += bm;
     }
   }
   // `mul` is mixed into both sides of `Mix` to guarantee non-zero values for
@@ -1306,27 +1365,29 @@ inline uint64_t CombineContiguousImpl(
   return Mix(mul - crcs.first, crcs.second - mul);
 }
 #else
+template <bool CaseInsensitive = false>
 inline uint64_t CombineContiguousImpl(
     uint64_t state, const unsigned char* first, size_t len,
     std::integral_constant<int, 8> /* sizeof_size_t */) {
   // For large values we use LowLevelHash or CityHash depending on the platform,
   // for small ones we use custom low latency hash.
   if (len <= 8) {
-    return CombineSmallContiguousImpl(PrecombineLengthMix(state, len), first,
-                                      len);
+    return CombineSmallContiguousImpl<CaseInsensitive>(
+        PrecombineLengthMix(state, len), first, len);
   }
   if (len <= 16) {
-    return CombineContiguousImpl9to16(PrecombineLengthMix(state, len), first,
-                                      len);
+    return CombineContiguousImpl9to16<CaseInsensitive>(
+        PrecombineLengthMix(state, len), first, len);
   }
   if (len <= 32) {
-    return CombineContiguousImpl17to32(PrecombineLengthMix(state, len), first,
-                                       len);
+    return CombineContiguousImpl17to32<CaseInsensitive>(
+        PrecombineLengthMix(state, len), first, len);
   }
   // We must not mix length into the state here because calling
   // CombineContiguousImpl twice with PiecewiseChunkSize() must be equivalent
   // to calling CombineLargeContiguousImpl once with 2 * PiecewiseChunkSize().
-  return CombineLargeContiguousImplOn64BitLengthGt32(state, first, len);
+  return CombineLargeContiguousImplOn64BitLengthGt32<CaseInsensitive>(
+      state, first, len);
 }
 #endif  // ABSL_HASH_INTERNAL_HAS_CRC32
 
