@@ -28,13 +28,33 @@
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 
-bool EqualsIgnoreCase(absl::string_view piece1,
-                      absl::string_view piece2) noexcept {
-  return (piece1.size() == piece2.size() &&
-          0 == absl::strings_internal::memcasecmp(piece1.data(), piece2.data(),
-                                                  piece1.size()));
-  // memcasecmp uses absl::ascii_tolower().
+namespace strings_internal {
+
+bool EqualsIgnoreCaseBytes(const char* a, const char* b, size_t n) noexcept {
+  size_t i = 0;
+  for (; i + 8 <= n; i += 8) {
+    if (ToLowerAscii64(little_endian::Load64(a + i)) !=
+        ToLowerAscii64(little_endian::Load64(b + i))) {
+      return false;
+    }
+  }
+  if (i < n) {
+    if (n >= 8) {
+      const size_t t = n - 8;
+      return ToLowerAscii64(little_endian::Load64(a + t)) ==
+             ToLowerAscii64(little_endian::Load64(b + t));
+    }
+    for (; i < n; ++i) {
+      if (ToLowerAscii8(static_cast<uint8_t>(a[i])) !=
+          ToLowerAscii8(static_cast<uint8_t>(b[i]))) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
+
+}  // namespace strings_internal
 
 bool StrContainsIgnoreCase(absl::string_view haystack,
                            absl::string_view needle) noexcept {
@@ -55,18 +75,6 @@ bool StrContainsIgnoreCase(absl::string_view haystack,
     const char both_cstr[3] = {lower_needle, upper_needle, '\0'};
     return haystack.find_first_of(both_cstr) != absl::string_view::npos;
   }
-}
-
-bool StartsWithIgnoreCase(absl::string_view text,
-                          absl::string_view prefix) noexcept {
-  return (text.size() >= prefix.size()) &&
-         EqualsIgnoreCase(text.substr(0, prefix.size()), prefix);
-}
-
-bool EndsWithIgnoreCase(absl::string_view text,
-                        absl::string_view suffix) noexcept {
-  return (text.size() >= suffix.size()) &&
-         EqualsIgnoreCase(text.substr(text.size() - suffix.size()), suffix);
 }
 
 absl::string_view FindLongestCommonPrefix(absl::string_view a,
