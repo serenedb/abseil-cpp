@@ -92,26 +92,47 @@ bool StrContainsIgnoreCase(absl::string_view haystack,
 bool StrContainsIgnoreCase(absl::string_view haystack,
                            char needle) noexcept;
 
+namespace strings_internal {
+
+// Case-insensitively compares `n` bytes of `a` and `b`; callers have already
+// established that both strings are `n` bytes long.
+bool EqualsIgnoreCaseBytes(const char* a, const char* b, size_t n) noexcept;
+
+}  // namespace strings_internal
+
 // EqualsIgnoreCase()
 //
 // Returns whether given ASCII strings `piece1` and `piece2` are equal, ignoring
 // case in the comparison.
-bool EqualsIgnoreCase(absl::string_view piece1,
-                      absl::string_view piece2) noexcept;
+inline bool EqualsIgnoreCase(absl::string_view piece1,
+                             absl::string_view piece2) noexcept {
+  return piece1.size() == piece2.size() &&
+         strings_internal::EqualsIgnoreCaseBytes(piece1.data(), piece2.data(),
+                                                 piece1.size());
+}
 
 // StartsWithIgnoreCase()
 //
 // Returns whether a given ASCII string `text` starts with `prefix`,
 // ignoring case in the comparison.
-bool StartsWithIgnoreCase(absl::string_view text,
-                          absl::string_view prefix) noexcept;
+inline bool StartsWithIgnoreCase(absl::string_view text,
+                                 absl::string_view prefix) noexcept {
+  return text.size() >= prefix.size() &&
+         strings_internal::EqualsIgnoreCaseBytes(text.data(), prefix.data(),
+                                                 prefix.size());
+}
 
 // EndsWithIgnoreCase()
 //
 // Returns whether a given ASCII string `text` ends with `suffix`, ignoring
 // case in the comparison.
-bool EndsWithIgnoreCase(absl::string_view text,
-                        absl::string_view suffix) noexcept;
+inline bool EndsWithIgnoreCase(absl::string_view text,
+                               absl::string_view suffix) noexcept {
+  return text.size() >= suffix.size() &&
+         strings_internal::EqualsIgnoreCaseBytes(
+             text.data() + (text.size() - suffix.size()), suffix.data(),
+             suffix.size());
+}
 
 // Yields the longest prefix in common between both input strings.
 // Pointer-wise, the returned result is a subset of input "a".

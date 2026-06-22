@@ -14,8 +14,10 @@
 
 #include "absl/strings/internal/memutil.h"
 
+#include <cstdint>
 #include <cstdlib>
 
+#include "absl/base/internal/endian.h"
 #include "absl/strings/ascii.h"
 
 namespace absl {
@@ -26,7 +28,15 @@ int memcasecmp(const char* s1, const char* s2, size_t len) {
   const unsigned char* us1 = reinterpret_cast<const unsigned char*>(s1);
   const unsigned char* us2 = reinterpret_cast<const unsigned char*>(s2);
 
-  for (size_t i = 0; i < len; i++) {
+  size_t i = 0;
+  for (; i + 8 <= len; i += 8) {
+    uint64_t a = ToLowerAscii64(absl::big_endian::Load64(us1 + i));
+    uint64_t b = ToLowerAscii64(absl::big_endian::Load64(us2 + i));
+    if (a != b) {
+      return a < b ? -1 : 1;
+    }
+  }
+  for (; i < len; i++) {
     unsigned char c1 = us1[i];
     unsigned char c2 = us2[i];
     // If bytes are the same, they will be the same when converted to lower.
