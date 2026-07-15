@@ -67,15 +67,6 @@ inline void BytesToHexStringInternal(const unsigned char* absl_nullable src,
   }
 }
 
-inline constexpr const char* kBase64Chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-inline constexpr const char* kWebSafeBase64Chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
-size_t Base64EscapeInternal(const unsigned char* src, size_t szsrc, char* dest,
-                            size_t szdest, const char* base64, bool do_padding);
-
 // CUnescape()
 //
 // Unescapes a `source` string and copies it into `dest`, rewriting C-style
