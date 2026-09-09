@@ -74,6 +74,7 @@ absl_cc_library(
     absl::strings_append_and_overwrite
     absl::strings_internal
     absl::strings_resize_and_overwrite
+    absl::algorithm_container
     absl::base
     absl::bits
     absl::charset
