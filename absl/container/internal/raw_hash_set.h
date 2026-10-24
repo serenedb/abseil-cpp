@@ -3694,6 +3694,14 @@ class raw_hash_set {
                   std::is_same_v<key_equal, std::equal_to<key_type>>) {
       return;
     }
+    if constexpr (requires { typename hasher::skip_absl_hash_eq_consistent; }) {
+      return;
+    }
+    if constexpr (requires {
+                    typename key_equal::skip_absl_hash_eq_consistent;
+                  }) {
+      return;
+    }
     if (empty()) return;
 
     const size_t hash_of_arg = hash_of(key);
@@ -3710,14 +3718,6 @@ class raw_hash_set {
 
     if (is_small()) {
       assert_consistent(/*unused*/ nullptr, single_slot());
-      return;
-    }
-    if constexpr (requires { typename hasher::skip_absl_hash_eq_consistent; }) {
-      return;
-    }
-    if constexpr (requires {
-                    typename key_equal::skip_absl_hash_eq_consistent;
-                  }) {
       return;
     }
     // We only do validation for small tables so that it's constant time.
