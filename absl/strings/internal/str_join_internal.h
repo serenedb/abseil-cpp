@@ -256,11 +256,16 @@ std::string JoinAlgorithm(Iterator start, Iterator end, absl::string_view sep,
           [&start, &end, &start_value, sep](char* result_buf,
                                             size_t result_buf_size) {
             // Joins strings
-            result_buf = absl::c_copy(start_value, result_buf);
+            const auto append = [&result_buf](const auto& piece) {
+              if (piece.size() != 0) {
+                memcpy(result_buf, piece.data(), piece.size());
+                result_buf += piece.size();
+              }
+            };
+            append(start_value);
             for (Iterator it = start; ++it != end;) {
-              result_buf = absl::c_copy(sep, result_buf);
-              auto&& value = *it;
-              result_buf = absl::c_copy(value, result_buf);
+              append(sep);
+              append(*it);
             }
             return result_buf_size;
           });
