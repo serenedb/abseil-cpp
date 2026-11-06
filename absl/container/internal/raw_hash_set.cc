@@ -1272,8 +1272,6 @@ void ResizeEmptyNonAllocatedTableImpl(
   ABSL_SWISSTABLE_ASSERT(common.empty());
   const size_t slot_size = policy.slot_size;
   const size_t slot_align_mask = policy.slot_align_mask;
-  common.set_capacity(new_capacity);
-  common.init_blocked_element_count(blocked_element_count);
   const bool has_infoz = policy.is_hashtablez_enabled &&
                          (force_infoz || ShouldSampleNextTable());
 
@@ -1282,6 +1280,8 @@ void ResizeEmptyNonAllocatedTableImpl(
                         RawHashSetLayout(new_capacity, slot_size,
                                          slot_align_mask, has_infoz,
                                          blocked_element_count));
+  common.set_capacity(new_capacity);
+  common.init_blocked_element_count(blocked_element_count);
   common.set_control(new_ctrl);
   common.generate_new_seed(has_infoz);
 
@@ -1368,11 +1368,11 @@ ABSL_ATTRIBUTE_NOINLINE void ResizeTableWithSeedChangeImpl(
   const size_t old_blocked_element_count = common.blocked_element_count();
   const size_t slot_size = policy.slot_size;
 
-  common.set_capacity(new_capacity);
-  common.set_blocked_element_count_to_zero();
   const auto [new_ctrl, new_slots] =
       AllocBackingArray(common, alloc_policy, new_capacity, slot_size,
                         has_infoz, /*blocked_element_count=*/0);
+  common.set_capacity(new_capacity);
+  common.set_blocked_element_count_to_zero();
   common.generate_new_seed(has_infoz);
   ResetCtrl(new_capacity, new_ctrl, new_slots, slot_size,
             /*blocked_element_count=*/0);
